@@ -1,9 +1,10 @@
 import bpy
-import sys
 import os
+import sys
 import math
 import tempfile
 import subprocess
+import platform
 from datetime import datetime
 from bpy_extras.io_utils import ImportHelper
 from .preference import ensure_pillow
@@ -591,10 +592,19 @@ class InstallPillow_OT(bpy.types.Operator):
 
 	def execute(self, context):
 		try:
-			import ensurepip
-			ensurepip.bootstrap()
-			python_exe = getattr(bpy.app, 'binary_path_python', None) or sys.executable
-			subprocess.check_call([python_exe, "-m", "pip", "install", "--upgrade", "Pillow"])
+			if platform.system() == "Windows":
+				lib_path = os.path.join(sys.prefix, 'lib', 'site-packages')
+				subprocess.check_call([
+					sys.executable, "-m", "pip", "install", 
+					"--upgrade", "Pillow", 
+					"--target", lib_path
+				])
+				import importlib
+				importlib.invalidate_caches()
+			else:
+				import ensurepip
+				ensurepip.bootstrap()
+				subprocess.check_call([sys.executable, "-m", "pip", "install", "Pillow"])
 			if not ensure_pillow():
 				self.report({'ERROR'}, "Failed to verify Pillow installation after installation.")
 			else:
