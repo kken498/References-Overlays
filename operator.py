@@ -572,18 +572,18 @@ class Paste_References_OT(bpy.types.Operator):
 		return {'FINISHED'}
 
 class InstallPillow_OT(bpy.types.Operator):
-	"""Install Pillow"""
+	"""Install or update Pillow"""
 	bl_idname = "preferences.install_pillow"
-	bl_label = "Install Pillow"
+	bl_label = "Install / Update Pillow"
 
 	def execute(self, context):
 		try:
 			import ensurepip
 			ensurepip.bootstrap()
-			subprocess.check_call([sys.executable, "-m", "pip", "install", "Pillow"])
-			self.report({'INFO'}, "Pillow installed successfully. Please restart Blender.")
+			subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "Pillow"])
+			self.report({'INFO'}, "Pillow installed or updated successfully. Please restart Blender.")
 		except Exception as e:
-			self.report({'ERROR'}, f"Failed to install Pillow: {e}")
+			self.report({'ERROR'}, f"Failed to install or update Pillow: {e}")
 		return {'FINISHED'}
 
 classes = (
