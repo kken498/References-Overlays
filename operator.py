@@ -1,4 +1,5 @@
 import bpy
+import sys
 import os
 import math
 import tempfile
@@ -592,7 +593,8 @@ class InstallPillow_OT(bpy.types.Operator):
 		try:
 			import ensurepip
 			ensurepip.bootstrap()
-			subprocess.check_call([bpy.app.binary_path_python, "-m", "pip", "install", "--upgrade", "Pillow"])
+			python_exe = getattr(bpy.app, 'binary_path_python', None) or sys.executable
+			subprocess.check_call([python_exe, "-m", "pip", "install", "--upgrade", "Pillow"])
 			if not ensure_pillow():
 				self.report({'ERROR'}, "Failed to verify Pillow installation after installation.")
 			else:
