@@ -3,9 +3,9 @@ import os
 import math
 import tempfile
 import subprocess
-import sys
 from datetime import datetime
 from bpy_extras.io_utils import ImportHelper
+from .preference import ensure_pillow
 from .defs import *
 
 class Load_References_OT(bpy.types.Operator, ImportHelper):
@@ -33,13 +33,25 @@ class Load_References_OT(bpy.types.Operator, ImportHelper):
 		references_overlays = context.screen.references_overlays
 
 		directory = self.directory
-		
+
 		for file_elem in self.files:
 			image_path = os.path.join(directory, file_elem.name)
+			blend_dir = os.path.dirname(bpy.data.filepath)
+			# Try common relative directory patterns
+			if os.path.exists(blend_dir):
+				folders = os.listdir(blend_dir)
+				folders.extend(['..', '../..'])
+				for relative_dir in folders:
+					test_path = os.path.join(blend_dir, relative_dir, file_elem.name)
+					if os.path.exists(test_path):
+						image_path = os.path.join('//'+relative_dir, file_elem.name)
+						break
+				
 			if bpy.data.images.get(file_elem.name):
 				image =  bpy.data.images[file_elem.name]
 			else:
 				image = bpy.data.images.load(image_path)
+
 			image.use_fake_user = True
 			item = references_overlays.reference.add()
 			item.name = image.name
@@ -580,8 +592,11 @@ class InstallPillow_OT(bpy.types.Operator):
 		try:
 			import ensurepip
 			ensurepip.bootstrap()
-			subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "Pillow"])
-			self.report({'INFO'}, "Pillow installed or updated successfully. Please restart Blender.")
+			subprocess.check_call([bpy.app.binary_path_python, "-m", "pip", "install", "--upgrade", "Pillow"])
+			if not ensure_pillow():
+				self.report({'ERROR'}, "Failed to verify Pillow installation after installation.")
+			else:
+				self.report({'INFO'}, "Pillow installed or updated successfully. Please restart Blender.")
 		except Exception as e:
 			self.report({'ERROR'}, f"Failed to install or update Pillow: {e}")
 		return {'FINISHED'}
