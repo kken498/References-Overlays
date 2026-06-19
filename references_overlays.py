@@ -72,7 +72,7 @@ class Overlay_Reference_Shape(bpy.types.Gizmo):
 		context = bpy.context
 		references_overlays = context.screen.references_overlays
 		references = references_overlays.reference
-		if index == len(references):
+		if index >= len(references) or len(references) == 0:
 			return
 		item = references[index]
 		image = bpy.data.images.get(item.name) 
@@ -781,7 +781,7 @@ def add_hotkey():
 		addon_keymaps.append((km, kmi))
 
 		km = kc.keymaps.new(name='3D View', space_type='VIEW_3D')
-		kmi = km.keymap_items.new('screen.paste_reference', 'V', 'PRESS',ctrl=True, alt=True)
+		kmi = km.keymap_items.new('screen.paste_reference', 'V', 'PRESS', shift=True)
 		kmi.active = True
 		addon_keymaps.append((km, kmi))
 

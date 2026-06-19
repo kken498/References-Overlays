@@ -1,13 +1,9 @@
 import bpy
 import os
-import sys
 import math
 import tempfile
-import subprocess
-import platform
 from datetime import datetime
 from bpy_extras.io_utils import ImportHelper
-from .preference import ensure_pillow
 from .defs import *
 
 class Load_References_OT(bpy.types.Operator, ImportHelper):
@@ -551,68 +547,35 @@ class Paste_References_OT(bpy.types.Operator):
 		return self.execute(context)
 
 	def execute(self, context):
-		try:
-			from PIL import ImageGrab, Image
-			image = ImageGrab.grabclipboard()
-			if isinstance(image, Image.Image):
-				temp_dir = tempfile.gettempdir()
-				current_time = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-				temp_path = os.path.join(temp_dir, f"{current_time}_clipboard.png")
-				image.save(temp_path)
-				
-				img = bpy.data.images.load(temp_path)
-				img.use_fake_user = True
+		from PIL import ImageGrab, Image
+		image = ImageGrab.grabclipboard()
+		if isinstance(image, Image.Image):
+			temp_dir = tempfile.gettempdir()
+			current_time = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+			temp_path = os.path.join(temp_dir, f"{current_time}_clipboard.png")
+			image.save(temp_path)
+			
+			img = bpy.data.images.load(temp_path)
+			img.use_fake_user = True
 
-				references_overlays = context.screen.references_overlays
-				item = references_overlays.reference.add()
-				item.name = img.name
-				item.x = self.x
-				item.y = self.y
-				if context.screen.references_overlays.overlays_toggle == False:
-					context.screen.references_overlays.overlays_toggle = True
+			references_overlays = context.screen.references_overlays
+			item = references_overlays.reference.add()
+			item.name = img.name
+			item.x = self.x
+			item.y = self.y
+			if context.screen.references_overlays.overlays_toggle == False:
+				context.screen.references_overlays.overlays_toggle = True
 
-				if context.screen.references_overlays.full_lock == True:
-					context.screen.references_overlays.full_lock = False
-				
-				self.report({'INFO'}, f"Image pasted from clipboard {current_time}")
+			if context.screen.references_overlays.full_lock == True:
+				context.screen.references_overlays.full_lock = False
+			
+			self.report({'INFO'}, f"Image pasted from clipboard {current_time}")
 
-			else:
-				self.report({'WARNING'}, "No image in clipboard")
-		except ImportError:
-			self.report({'ERROR'}, "Pillow is not installed. Please install Pillow from the add-on preferences and restart Blender.")
-		except Exception as e:
-			self.report({'ERROR'}, str(e))
+		else:
+			self.report({'WARNING'}, "No image in clipboard")
 		
 		return {'FINISHED'}
-
-class InstallPillow_OT(bpy.types.Operator):
-	"""Install or update Pillow"""
-	bl_idname = "preferences.install_pillow"
-	bl_label = "Install / Update Pillow"
-
-	def execute(self, context):
-		try:
-			if platform.system() == "Windows":
-				lib_path = os.path.join(sys.prefix, 'lib', 'site-packages')
-				subprocess.check_call([
-					sys.executable, "-m", "pip", "install", 
-					"--upgrade", "Pillow", 
-					"--target", lib_path
-				])
-				import importlib
-				importlib.invalidate_caches()
-			else:
-				import ensurepip
-				ensurepip.bootstrap()
-				subprocess.check_call([sys.executable, "-m", "pip", "install", "Pillow"])
-			if not ensure_pillow():
-				self.report({'ERROR'}, "Failed to verify Pillow installation after installation.")
-			else:
-				self.report({'INFO'}, "Pillow installed or updated successfully. Please restart Blender.")
-		except Exception as e:
-			self.report({'ERROR'}, f"Failed to install or update Pillow: {e}")
-		return {'FINISHED'}
-
+	
 classes = (
 	 Load_References_OT,
 	 Add_References_OT,
@@ -627,7 +590,6 @@ classes = (
 	 Toggle_Lock_References_OT,
 	 Toggle_Grayscale_References_OT,
 	 Paste_References_OT,
-	 InstallPillow_OT,
 )
 
 def register():

@@ -10,16 +10,6 @@ class AddonPreferences(bpy.types.AddonPreferences):
 		self.draw_preferences(context, col)
 
 	def draw_preferences(self, context, col):
-
-		col.label(text="Feature - paste from clipboard requires Pillow.", icon='INFO')
-		if not ensure_pillow():
-			col.operator("preferences.install_pillow", text="Install Pillow")
-			col.label(text="Please restart Blender after installation.")
-		else:
-			col.label(text="Pillow is installed.")
-
-		col.separator()
-
 		row = col.row()
 		row.label(text = "", icon = "EVENT_CTRL")
 		row.label(text = "HotKey")
@@ -66,16 +56,8 @@ class AddonPreferences(bpy.types.AddonPreferences):
 def get_hotkey_entry_item(km, kmi_name, kmi_value):
 	for i, km_item in enumerate(km.keymap_items):
 		if km.keymap_items.keys()[i] == kmi_name:
-			# if km.keymap_items[i].properties.name == kmi_value: # プロパティがある場合は有効にする
 			return km_item
 	return None
-
-def ensure_pillow():
-	try:
-		import PIL
-		return True
-	except ImportError:
-		return False
 
 classes = (
 	 AddonPreferences,
