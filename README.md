@@ -64,7 +64,3 @@ You can add references in the 3D Viewport Overlays
 ![Image](https://imgur.com/HvOZi32.gif)
 # Utilize the color picker
 ![Image](https://imgur.com/XpINl2X.gif)
-
-# Notice
-* Feature pasting the image from the clipboard requires the Pillow Library, which you can install Pillow from the add-on preferences
-
