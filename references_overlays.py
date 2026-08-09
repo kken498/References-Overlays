@@ -1253,4 +1253,4 @@ def unregister():
 
     del bpy.types.Screen.references_overlays
 
-    del bpy.types.Scene.references_overlays_independent
+    del bpy.types.Screen.references_overlays_independent
