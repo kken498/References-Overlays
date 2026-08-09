@@ -28,7 +28,7 @@ class Load_References_OT(bpy.types.Operator, ImportHelper):
     def execute(self, context):
         from . import references_overlays
 
-        references_overlays_props = context.scene.references_overlays
+        references_overlays_props = get_reference_prop(context)
 
         directory = self.directory
 
@@ -90,7 +90,7 @@ class Add_References_OT(bpy.types.Operator):
     def execute(self, context):
         from . import references_overlays
 
-        references_overlays_props = context.scene.references_overlays
+        references_overlays_props = get_reference_prop(context)
         item = references_overlays_props.reference.add()
         item.fps = context.scene.render.fps
 
@@ -120,7 +120,7 @@ class Rest_References_OT(bpy.types.Operator):
     def execute(self, context):
         from . import references_overlays
 
-        references_overlays_props = context.scene.references_overlays
+        references_overlays_props = get_reference_prop(context)
         item = references_overlays_props.reference[self.index]
         transform = references_overlays.get_image_transform_state(context, self.index)
         if not transform:
@@ -168,9 +168,7 @@ class Remove_References_OT(bpy.types.Operator):
     index: bpy.props.IntProperty(options={"HIDDEN"})
 
     def execute(self, context):
-        from . import references_overlays
-
-        references_overlays_props = context.scene.references_overlays
+        references_overlays_props = get_reference_prop(context)
         idx = self.index
 
         references_overlays_props.reference.remove(idx)
@@ -197,7 +195,7 @@ class Clear_References_OT(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
-        references_overlays = context.scene.references_overlays
+        references_overlays = get_reference_prop(context)
         references_overlays.reference.clear()
         references_overlays.reference_index = 0
         return {"FINISHED"}
@@ -247,7 +245,7 @@ class Move_References_OT(bpy.types.Operator):
         context.area.tag_redraw()
         from . import references_overlays
 
-        references_overlays_props = context.scene.references_overlays
+        references_overlays_props = get_reference_prop(context)
         item = references_overlays_props.reference[self.index]
         transform = references_overlays.get_image_transform_state(context, self.index)
         if not transform:
@@ -402,20 +400,27 @@ class Move_References_OT(bpy.types.Operator):
         if self.mode == "PAN":
             if event.type == "MOUSEMOVE":
                 value = 0.2 if event.shift else 1.0
-                transform.pivot_x = (
+                pivot_x = (
                     self.pivot_x
                     + (event.mouse_region_x - self.mouse_region_x)
                     / (context.window.width / 2)
                     * -1
                     * value
                 )
-                transform.pivot_y = (
+                pivot_y = (
                     self.pivot_y
                     + (event.mouse_region_y - self.mouse_region_y)
                     / (context.window.width / 2)
                     * -1
                     * value
                 )
+                if event.ctrl:
+                    snap = 0.1
+                    pivot_x = round(pivot_x / snap) * snap
+                    pivot_y = round(pivot_y / snap) * snap
+
+                transform.pivot_x = pivot_x
+                transform.pivot_y = pivot_y
 
         elif self.mode == "CROP":
             if event.type == "MOUSEMOVE":
@@ -509,6 +514,20 @@ class Move_References_OT(bpy.types.Operator):
                         )
 
         else:
+            if event.type == 'WHEELUPMOUSE':
+                # Handle mouse scroll up events
+                if event.ctrl:
+                    transform.size = transform.size * 1.025
+                else:
+                    transform.size = transform.size * 1.1
+
+            if event.type == 'WHEELDOWNMOUSE':
+                # Handle mouse scroll down events
+                if event.ctrl:
+                    transform.size = transform.size * 0.975
+                else:
+                    transform.size = transform.size * 0.9
+
             if event.type == "MOUSEMOVE":
                 if self.mode == "ROTATE":
                     current_angle = math.atan2(
@@ -524,7 +543,7 @@ class Move_References_OT(bpy.types.Operator):
 
                     new_rot = self.init_val - delta_angle
 
-                    if event.shift:
+                    if event.shift or event.ctrl:
                         snap = math.radians(5)
                         new_rot = round(new_rot / snap) * snap
 
@@ -532,19 +551,32 @@ class Move_References_OT(bpy.types.Operator):
 
                 elif self.mode == "SCALE":
                     delta = event.mouse_x - self.init_mouse_x
-                    factor = 0.01 if event.shift else 0.02
-                    transform.size = max(0.01, self.init_val * (1.0 + delta * factor))
+                    factor = 0.002 if event.shift else 0.005
+                    size = self.init_val * (1.0 + delta * factor)
+                    if event.ctrl:
+                        snap = 0.1
+                        size = round(size / snap) * snap
+                    transform.size = max(0.01, size)
 
                 elif self.mode == "ZOOM":
                     delta = event.mouse_x - self.init_mouse_x
-                    factor = 0.002 if event.shift else 0.005
-                    transform.zoom = max(0.0, min(1.0, self.init_val + delta * factor))
+                    factor = 0.001 if event.shift else 0.002
+                    zoom = self.init_val + delta * factor
+                    if event.ctrl:
+                        snap = 0.1
+                        zoom = round(zoom / snap) * snap
+
+                    transform.zoom = max(0.0, min(1.0, zoom))
 
                 elif self.mode == "ALPHA":
                     delta = event.mouse_x - self.init_mouse_x
                     factor = 0.002 if event.shift else 0.005
+                    opacity = self.init_val + delta * factor
+                    if event.ctrl:
+                        snap = 0.1
+                        opacity = round(opacity / snap) * snap
                     transform.opacity = max(
-                        0.0, min(1.0, self.init_val + delta * factor)
+                        0.0, min(1.0, opacity)
                     )
 
                 else:
@@ -600,6 +632,7 @@ class Move_References_OT(bpy.types.Operator):
                         else:
                             transform.x = region_x
                             transform.y = region_y
+
                     else:
                         references_overlays._locked_move_attempt_index = self.index
                         context.area.tag_redraw()
@@ -640,7 +673,7 @@ class Move_References_OT(bpy.types.Operator):
         references_overlays._locked_move_attempt_index = -1
 
         if context.area.type == "VIEW_3D":
-            references_overlays_props = context.scene.references_overlays
+            references_overlays_props = get_reference_prop(context)
             references_overlays_props.reference_index = self.index
             item = references_overlays_props.reference[self.index]
             transform = references_overlays.get_image_transform_state(
@@ -785,8 +818,8 @@ class Move_References_OT(bpy.types.Operator):
                 )
 
             context.area.header_text_set(
-                "LMB:Confirm | RMB:Cancel | Drag: R=Rotate, S=Scale, Z=Zoom, A=Alpha, C=Crop, G=Pan | "
-                "B:Grayscale | L:Lock Pos | O:Ortho | Alt+R/S/Z/A/C/G:Reset | F/V:Flip | H:Hide | Shift+H:Isolate | Alt+H:Unhide | 1/2:Depth | X:Remove"
+                "LMB:Confirm | RMB:Cancel | Scroll Wheel: Scale | Drag: R=Rotate, S=Scale, Z=Zoom, A=Alpha, C=Crop, G=Pan | "
+                "B:Grayscale | L:Lock Pos | O:Ortho | Alt+R/S/Z/A/C/G:Reset | F/V:Flip | H:Hide | Shift+H:Isolate | Alt+H:Unhide | 1/2:Depth | Ctrl: Snap | X:Remove"
             )
 
             context.window_manager.modal_handler_add(self)
@@ -797,7 +830,7 @@ class Move_References_OT(bpy.types.Operator):
 
 
 class Global_Move_References_OT(bpy.types.Operator):
-    bl_idname = "screen.gobal_move_reference"
+    bl_idname = "screen.global_move_reference"
     bl_label = "Global Move References"
     bl_description = "Move References"
     bl_options = {"REGISTER", "UNDO"}
@@ -812,18 +845,23 @@ class Global_Move_References_OT(bpy.types.Operator):
 
     def modal(self, context, event):
         context.area.tag_redraw()
-        item = context.scene.references_overlays
+        item = get_reference_prop(context)
 
         if event.type == "MOUSEMOVE":
             region_x = self.x + event.mouse_region_x - self.mouse_region_x
             region_y = self.y + event.mouse_region_y - self.mouse_region_y
 
             if event.shift:
-                snap_value = 25
-            else:
+                region_x = region_x / 2
+                region_y = region_y / 2
+
+            if event.ctrl:
                 snap_value = 50
-            item.x = round(region_x / snap_value) * snap_value
-            item.y = round(region_y / snap_value) * snap_value
+                item.x = round(region_x / snap_value) * snap_value
+                item.y = round(region_y / snap_value) * snap_value
+            else:
+                item.x = region_x
+                item.y = region_y
 
         elif event.type == "WHEELUPMOUSE":
             if event.shift:
@@ -858,7 +896,7 @@ class Global_Move_References_OT(bpy.types.Operator):
 
     def invoke(self, context, event):
         if context.area.type == "VIEW_3D":
-            item = context.scene.references_overlays
+            item = get_reference_prop(context)
             self.x = item.x
             self.y = item.y
             self.mouse_region_x = event.mouse_region_x
@@ -866,8 +904,8 @@ class Global_Move_References_OT(bpy.types.Operator):
             self.size = item.size
 
             context.area.header_text_set(
-                "LMB: Confirm | RMB/ESC: Cancel | Scroll: Global Scale | "
-                "S: Reset Size | R: Reset Position | Shift: Snap"
+                "LMB: Confirm | RMB/ESC: Cancel | Scroll Wheel: Global Scale | "
+                "S: Reset Size | R: Reset Position | Shift: Fine-Tune | Ctrl: Snap"
             )
 
             context.window_manager.modal_handler_add(self)
@@ -889,7 +927,7 @@ class Align_References_OT(bpy.types.Operator):
     def execute(self, context):
         from . import references_overlays
 
-        references_overlays_props = context.scene.references_overlays
+        references_overlays_props = get_reference_prop(context)
         item = references_overlays_props.reference[
             references_overlays_props.reference_index
         ]
@@ -947,7 +985,7 @@ class Toggle_References_OT(bpy.types.Operator):
         vp_state.is_enabled = new_state
 
         if new_state:
-            props = context.scene.references_overlays
+            props = get_reference_prop(context)
             for i in range(len(props.reference)):
                 references_overlays.get_image_transform_state(context, i)
 
@@ -971,10 +1009,10 @@ class Toggle_Lock_References_OT(bpy.types.Operator):
         return references_overlays._viewport_toggle_states.get(vp_key, False)
 
     def execute(self, context):
-        context.scene.references_overlays.full_lock = (
-            not context.scene.references_overlays.full_lock
-        )
-        if context.scene.references_overlays.full_lock == True:
+        props = get_reference_prop(context)
+        props.full_lock = not props.full_lock
+
+        if props.full_lock == True:
             self.report({"INFO"}, "References Overlays ignore mouse events.")
         else:
             self.report({"INFO"}, "References Overlays is unlocked.")
@@ -1013,7 +1051,7 @@ class Paste_References_OT(bpy.types.Operator):
             img = bpy.data.images.load(temp_path)
             img.use_fake_user = True
 
-            references_overlays_props = context.scene.references_overlays
+            references_overlays_props = get_reference_prop(context)
             item = references_overlays_props.reference.add()
             item.name = img.name
 
@@ -1042,7 +1080,7 @@ class Paste_References_OT(bpy.types.Operator):
 
 
 class Propagate_Transforms_OT(bpy.types.Operator):
-    bl_idname = "screen.propagate_reference_transforms"
+    bl_idname = "scene.propagate_reference_transforms"
     bl_label = "Propagate Transforms to All Viewports"
     bl_description = (
         "Copy the transform settings of the current viewport to all other viewports"
@@ -1052,7 +1090,7 @@ class Propagate_Transforms_OT(bpy.types.Operator):
     def execute(self, context):
         from . import references_overlays
 
-        props = context.scene.references_overlays
+        props = get_reference_prop(context)
         source_vp_state = references_overlays.get_current_viewport_state(context)
         if not source_vp_state:
             return {"CANCELLED"}

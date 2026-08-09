@@ -147,11 +147,6 @@ class Reference_Overlay_Props(bpy.types.PropertyGroup):
         default=True,
         description="References Overlay Toggle",
     )
-    show_preview: bpy.props.BoolProperty(
-        name="Show Preview",
-        default=True,
-        description="Show References Preview on menu.",
-    )
     show_name: bpy.props.BoolProperty(
         name="Show Tag Name", default=False, description="Show References Tag Name"
     )
@@ -184,7 +179,7 @@ def get_current_viewport_state(context):
     if not vp_key:
         return None
 
-    props = context.scene.references_overlays
+    props = get_reference_prop(context)
 
     # Find existing state
     for vp_state in props.viewport_states:
@@ -202,7 +197,7 @@ def get_current_viewport_state(context):
 
 def initialize_transform_for_all_viewports(context, image_index, init_x=0, init_y=0):
     """Ensures all 3D viewports have a transform state for the given image index."""
-    props = context.scene.references_overlays
+    props = get_reference_prop(context)
     for window in bpy.context.window_manager.windows:
         for area in window.screen.areas:
             if area.type == "VIEW_3D":
@@ -263,11 +258,16 @@ def restore_overlay_states(dummy):
     _last_active_screen = None
     _last_active_index = None
 
-    scene = bpy.context.scene
-    if not hasattr(scene, "references_overlays"):
-        return
+    context = bpy.context
 
-    props = scene.references_overlays
+    if context.screen.references_overlays_independent:
+        if not hasattr(context.screen, "references_overlays"):
+            return
+    else:
+        if not hasattr(context.scene, "references_overlays"):
+            return
+
+    props = get_reference_prop(context)
 
     # Rebuild toggle states from saved data (keys are stable strings like "Layout_0")
     for vp_state in props.viewport_states:
@@ -297,7 +297,7 @@ def draw_name(context, item, x, y):
     color = (1, 1, 1, 1)
     blf.color(font_id, color[0], color[1], color[2], color[3])
 
-    if context.scene.references_overlays.tweak_size:
+    if get_reference_prop(context).tweak_size:
         region_size = map_range(
             3, 0, context.window.width / 2, 0, context.region.width
         ) * map_range(3, 0, context.window.height / 2, 0, context.region.height)
@@ -312,7 +312,7 @@ def draw_name(context, item, x, y):
 
 
 def draw_outline(context, min_x, min_y, max_x, max_y, rotation_angle, color, thickness):
-    references_overlays = context.scene.references_overlays
+    references_overlays = get_reference_prop(context)
     center_x = (min_x + max_x) / 2
     center_y = (min_y + max_y) / 2
 
@@ -361,7 +361,7 @@ class Overlay_Reference_Shape(bpy.types.Gizmo):
 
     def draw_custom_shape(self, shader, index, select_id=None):
         context = bpy.context
-        references_overlays = context.scene.references_overlays
+        references_overlays = get_reference_prop(context)
         references = references_overlays.reference
         if index >= len(references) or len(references) == 0:
             return
@@ -414,7 +414,7 @@ class Overlay_Reference_Shape(bpy.types.Gizmo):
             if image.pixels:
                 image.update()
 
-            fps = item.fps / 10
+            fps = context.scene.render.fps / item.fps
 
             if item.use_cyclic:
                 image.gl_load(
@@ -428,8 +428,7 @@ class Overlay_Reference_Shape(bpy.types.Gizmo):
                 image.gl_load(
                     frame=int(
                         (context.scene.frame_current + item.frame_offset)
-                        * item.speed
-                        / fps
+                        * (item.speed / fps)
                     )
                     if context.scene.frame_current > 0
                     else item.frame_offset + 1
@@ -648,7 +647,7 @@ class Overlay_Reference_Shape(bpy.types.Gizmo):
         self.custom_shape = self.new_custom_shape(self)
 
     def test_select(self, context, location):
-        references_overlays = context.scene.references_overlays
+        references_overlays = get_reference_prop(context)
         if references_overlays.full_lock or self.index >= len(
             references_overlays.reference
         ):
@@ -765,10 +764,10 @@ class Overlay_Reference_UI_Control(bpy.types.GizmoGroup):
         vp_key = get_vp_key(context)
         if not vp_key or not _viewport_toggle_states.get(vp_key, False):
             return False
-        return len(context.scene.references_overlays.reference) > 0
+        return len(get_reference_prop(context).reference) > 0
 
     def draw_prepare(self, context):
-        references_overlays = context.scene.references_overlays
+        references_overlays = get_reference_prop(context)
         for i, item in enumerate(references_overlays.reference):
             if bpy.data.images.get(item.name):
                 if i + 1 > len(self.gizmos):
@@ -795,7 +794,7 @@ class Overlay_Reference_UI_Control(bpy.types.GizmoGroup):
                 continue
 
     def setup(self, context):
-        for i, item in enumerate(context.scene.references_overlays.reference):
+        for i, item in enumerate(get_reference_prop(context).reference):
             self.draw_gizmo(i)
 
 
@@ -872,38 +871,41 @@ class OVERLAY_PT_Reference(bpy.types.Panel):
     bl_label = "References Overlay"
     bl_space_type = "VIEW_3D"
     bl_region_type = "HEADER"
-    bl_ui_units_x = 14
+    bl_ui_units_x = 16
 
     def draw(self, context):
-        references_overlays = context.scene.references_overlays
+        references_overlays = get_reference_prop(context)
         layout = self.layout
-        layout.label(text="References Overlay")
         layout.label(
             text="References Total " + str(len(references_overlays.reference)),
             icon="IMAGE_REFERENCE",
         )
+        layout.prop(context.screen, "references_overlays_independent", text="Independent Screen")
 
-        row = layout.row(align=True)
-        col = row.column(align=True)
-        col.prop(references_overlays, "full_lock", text="Full Lock")
-        col.prop(references_overlays, "show_name", text="Show Tag Name")
+        col = layout.column(align=True)
 
-        col = row.column(align=True)
-        col.prop(references_overlays, "resize_image", text="Resize Image")
-        col.prop(references_overlays, "tweak_size", text="Auto Tweak Size")
-        col.prop(references_overlays, "fit_view_distance", text="Fit View Distance")
+        row = col.row(align=True)
+        row.prop(references_overlays, "full_lock", text="Full Lock")
+        row.prop(references_overlays, "show_name", text="Show Tag Name")
+
+        row = col.row(align=True)
+        row.prop(references_overlays, "resize_image", text="Resize Image")
+        row.prop(references_overlays, "tweak_size", text="Auto Tweak Size")
+
+        row = col.row(align=True)
+        row .prop(references_overlays, "fit_view_distance", text="Fit View Distance")
 
         row = layout.row(align=True)
         row.operator("screen.load_references", icon="FILEBROWSER", text="Load Image")
         row.operator("screen.paste_reference", icon="PASTEDOWN", text="")
-        row.operator("screen.clear_references_slot", icon="TRASH", text="")
-
-        row = layout.row(align=True)
-        row.operator(
-            "screen.propagate_reference_transforms",
-            text="Propagate Transforms to All Viewports",
-            icon="FILE_REFRESH",
-        )
+        
+        if not context.screen.references_overlays_independent:
+            row = layout.row(align=True)
+            row.operator(
+                "scene.propagate_reference_transforms",
+                text="Propagate Transforms to All Viewports",
+                icon="FILE_REFRESH",
+            )
 
         row = layout.row()
         row.template_list(
@@ -924,20 +926,26 @@ class OVERLAY_PT_Reference(bpy.types.Panel):
         sub = col.column(align=True)
         sub.enabled = len(references_overlays.reference) > 0
 
+        if context.screen.references_overlays_independent:
+            list_path = "screen.references_overlays.reference"
+            active_index_path = "screen.references_overlays.reference_index"
+        else:
+            list_path = "scene.references_overlays.reference"
+            active_index_path = "scene.references_overlays.reference_index"
+
         up = sub.operator("uilist.entry_move", icon="TRIA_UP", text="")
-        up.list_path = "scene.references_overlays.reference"
-        up.active_index_path = "scene.references_overlays.reference_index"
+        up.list_path = list_path
+        up.active_index_path = active_index_path
         up.direction = "DOWN"
 
         down = sub.operator("uilist.entry_move", icon="TRIA_DOWN", text="")
-        down.list_path = "scene.references_overlays.reference"
-        down.active_index_path = "scene.references_overlays.reference_index"
+        down.list_path = list_path
+        down.active_index_path = active_index_path
         down.direction = "UP"
 
         col.separator()
-        col.prop(
-            references_overlays, "show_preview", text="", icon="HIDE_OFF", toggle=True
-        )
+
+        col.operator("screen.clear_references_slot", icon="TRASH", text="")
 
         if len(references_overlays.reference) == 0:
             return
@@ -953,147 +961,164 @@ class OVERLAY_PT_Reference(bpy.types.Panel):
         if not image:
             return
 
-        if image.preview and references_overlays.show_preview:
-            layout.template_icon(image.preview.icon_id, scale=10.0)
-
-        layout.separator()
-        row = layout.row(align=True)
+        col = layout.column()
+        row = col.row(align=True)
         xrow = row.row(align=True)
         xrow.alignment = "LEFT"
-        xrow.label(text="Tag Name")
-        xrow = row.row(align=True)
-        xrow.prop(item, "tag_name", text="")
-        xrow.operator(
-            "screen.rest_reference", icon="FILE_REFRESH", text=""
-        ).index = references_overlays.reference_index
-
-        layout.separator()
-
-        row = layout.row(align=True)
-        row.prop(
+        xrow.prop(
             transform,
             "hide",
             text="",
             icon="HIDE_ON" if transform.hide else "HIDE_OFF",
-            emboss=False,
+            invert_checkbox=True,
         )
-        row.prop_search(item, "name", bpy.data, "images", text="")
-        row.prop(
+        xrow = row.row(align=True)
+        xrow.prop(item, "tag_name", text="")
+        xrow.prop(
             item,
             "lock",
             text="",
             icon="LOCKED" if item.lock else "UNLOCKED",
-            emboss=False,
         )
+        xrow.operator(
+            "screen.rest_reference", icon="FILE_REFRESH", text=""
+        ).index = references_overlays.reference_index
 
-        layout.separator()
-
-        row = layout.row(align=True)
-        xrow = row.row(align=True)
-        xrow.alignment = "LEFT"
-        xrow.label(text="Path")
-        xrow = row.row(align=True)
-        xrow.prop(image, "filepath", text="")
-
-        layout.separator()
 
         col = layout.column()
         col.use_property_split = True
         col.use_property_decorate = False
 
-        col.prop(image.colorspace_settings, "name", text="Color Space")
+        if image.preview:
+            header, panel = col.panel(idname="reference_preview", default_closed=False)
+            header.label(text="Image Preview")
+            if panel:
+                panel.template_icon(image.preview.icon_id, scale=10.0)
 
-        col.separator()
-        row = col.row(align=True, heading="Color Mode")
-        row.prop(
-            transform, "grayscale", text="Color", toggle=True, invert_checkbox=True
-        )
-        row.prop(transform, "grayscale", text="Grayscale", toggle=True)
+        header, panel = col.panel(idname="reference_path", default_closed=False)
+        header.label(text="Path")
+        if panel:
+            panel.use_property_split = True
+            panel.use_property_decorate = False
 
-        col.separator()
-        col.prop(transform, "opacity", text="Alpha", slider=True)
+            row = panel.row(align=True)
+            row.prop_search(item, "name", bpy.data, "images", text="")
 
-        col.separator()
+            row = panel.row(align=True)
+            xrow = row.row(align=True)
+            xrow.alignment = "LEFT"
+            xrow.label(text="Path")
+            xrow = row.row(align=True)
+            xrow.prop(image, "filepath", text="")
+
+        header, panel = col.panel(idname="reference_color", default_closed=False)
+        header.label(text="Color")
+        if panel:
+            sub = panel.column()
+            sub.prop(image.colorspace_settings, "name", text="Color Space")
+
+            row = sub.row(align=True, heading="Color Mode")
+            row.prop(
+                transform, "grayscale", text="Color", toggle=True, invert_checkbox=True
+            )
+            row.prop(transform, "grayscale", text="Grayscale", toggle=True)
+
+            sub.prop(transform, "opacity", text="Alpha", slider=True)
 
         if image.source in {"SEQUENCE", "MOVIE"}:
-            col.prop(item, "fps", text="FPS Tempo")
-            col.prop(item, "speed", text="Speed")
-            col.prop(item, "frame_offset", text="Offset")
-            col.prop(item, "use_cyclic", text="Cyclic")
+            header, panel = col.panel(idname="reference_sequence", default_closed=False)
+            header.label(text="Sequence")
+            if panel:
+                sub = panel.column(align=True)
+                sub.prop(item, "fps", text="FPS Tempo")
+                sub.prop(item, "speed", text="Speed")
+                sub.prop(item, "frame_offset", text="Offset")
+                sub.prop(item, "use_cyclic", text="Cyclic")
 
-        col.prop(transform, "size", text="Size")
+        header, panel = col.panel(idname="reference_transform", default_closed=False)
+        header.label(text="Transform")
+        if panel:
+            sub = panel.column()
+            subcol = sub.column(align=True)
+            subcol.prop(transform, "x", text="Position X")
+            subcol.prop(transform, "y", text="Y")
 
-        col.separator()
-        col.prop(transform, "x", text="Position X")
-        col.prop(transform, "y", text="Y")
+            sub.prop(transform, "rotation", text="Rotation")
+            sub.prop(transform, "size", text="Size")
 
-        col.separator()
-        col.prop(transform, "rotation", text="Rotation")
+        header, panel = col.panel(idname="reference_visual", default_closed=False)
+        header.label(text="Visual")
+        if panel:
+            sub = panel.column()
 
-        col.separator()
-        col.prop(transform, "crop_left", text="Crop Left")
-        col.prop(transform, "crop_top", text="Top")
-        col.prop(transform, "crop_right", text="Right")
-        col.prop(transform, "crop_bottom", text="Bottom")
+            sub.row().prop(transform, "depth_set", text="Depth", expand=True)
 
-        col.separator()
-        col.row().prop(transform, "depth_set", text="Depth", expand=True)
+            row = sub.row(align=True, heading="Flip")
+            row.prop(transform, "flip_x", text="X", toggle=True)
+            row.prop(transform, "flip_y", text="Y", toggle=True)
 
-        row = col.row(align=True, heading="Flip")
-        row.prop(transform, "flip_x", text="X", toggle=True)
-        row.prop(transform, "flip_y", text="Y", toggle=True)
+        header, panel = col.panel(idname="crop_reference", default_closed=True)
+        header.label(text="Crop")
+        if panel:
+            sub = panel.column(align=True)
+            sub.prop(transform, "crop_left", text="Left")
+            sub.prop(transform, "crop_top", text="Top")
+            sub.prop(transform, "crop_right", text="Right")
+            sub.prop(transform, "crop_bottom", text="Bottom")
 
-        col.separator()
-        col.prop(transform, "orthographic", text="Only Orthographic")
+        header, panel = col.panel(idname="orthographic", default_closed=True)
+        header.use_property_split = False
+        header.use_property_decorate = False
+        header.prop(transform, "orthographic", text="Only Orthographic")
+        if panel:
+            panel.active = transform.orthographic
+            sub = panel.column(align=True)
+            row = sub.row(align=True)
+            row.prop(transform, "front", toggle=True)
+            row.prop(transform, "left", toggle=True)
+            row.prop(transform, "top", toggle=True)
 
-        sub = col.column(align=True)
-        sub.active = transform.orthographic
+            row = sub.row(align=True)
+            row.prop(transform, "back", toggle=True)
+            row.prop(transform, "right", toggle=True)
+            row.prop(transform, "bottom", toggle=True)
 
-        row = sub.row(align=True, heading="Orthographic")
-        row.prop(transform, "front", toggle=True)
-        row.prop(transform, "left", toggle=True)
-        row.prop(transform, "top", toggle=True)
-
-        row = sub.row(align=True)
-        row.prop(transform, "back", toggle=True)
-        row.prop(transform, "right", toggle=True)
-        row.prop(transform, "bottom", toggle=True)
-
-        col.separator()
-        xrow = col.row()
-        xrow.label(text="Align")
-        sub = xrow.column(align=True)
-        colrow = sub.row(align=True)
-        op = colrow.operator("screen.align_reference", icon="BLANK1", text="")
-        op.align_x = "LEFT"
-        op.align_y = "UP"
-        op = colrow.operator("screen.align_reference", icon="TRIA_UP_BAR", text="")
-        op.align_x = "CENTER"
-        op.align_y = "UP"
-        op = colrow.operator("screen.align_reference", icon="BLANK1", text="")
-        op.align_x = "RIGHT"
-        op.align_y = "UP"
-        colrow = sub.row(align=True)
-        op = colrow.operator("screen.align_reference", icon="TRIA_LEFT_BAR", text="")
-        op.align_x = "LEFT"
-        op.align_y = "CENTER"
-        op = colrow.operator("screen.align_reference", icon="LAYER_ACTIVE", text="")
-        op.align_x = "CENTER"
-        op.align_y = "CENTER"
-        op = colrow.operator("screen.align_reference", icon="TRIA_RIGHT_BAR", text="")
-        op.align_x = "RIGHT"
-        op.align_y = "CENTER"
-        colrow = sub.row(align=True)
-        op = colrow.operator("screen.align_reference", icon="BLANK1", text="")
-        op.align_x = "LEFT"
-        op.align_y = "DOWN"
-        op = colrow.operator("screen.align_reference", icon="TRIA_DOWN_BAR", text="")
-        op.align_x = "CENTER"
-        op.align_y = "DOWN"
-        op = colrow.operator("screen.align_reference", icon="BLANK1", text="")
-        op.align_x = "RIGHT"
-        op.align_y = "DOWN"
-
+        header, panel = col.panel(idname="align_reference", default_closed=True)
+        header.label(text="Alignment")
+        if panel:
+            xrow = panel.row()
+            xrow.label(text="Align")
+            sub = xrow.column(align=True)
+            colrow = sub.row(align=True)
+            op = colrow.operator("screen.align_reference", icon="BLANK1", text="")
+            op.align_x = "LEFT"
+            op.align_y = "UP"
+            op = colrow.operator("screen.align_reference", icon="TRIA_UP_BAR", text="")
+            op.align_x = "CENTER"
+            op.align_y = "UP"
+            op = colrow.operator("screen.align_reference", icon="BLANK1", text="")
+            op.align_x = "RIGHT"
+            op.align_y = "UP"
+            colrow = sub.row(align=True)
+            op = colrow.operator("screen.align_reference", icon="TRIA_LEFT_BAR", text="")
+            op.align_x = "LEFT"
+            op.align_y = "CENTER"
+            op = colrow.operator("screen.align_reference", icon="LAYER_ACTIVE", text="")
+            op.align_x = "CENTER"
+            op.align_y = "CENTER"
+            op = colrow.operator("screen.align_reference", icon="TRIA_RIGHT_BAR", text="")
+            op.align_x = "RIGHT"
+            op.align_y = "CENTER"
+            colrow = sub.row(align=True)
+            op = colrow.operator("screen.align_reference", icon="BLANK1", text="")
+            op.align_x = "LEFT"
+            op.align_y = "DOWN"
+            op = colrow.operator("screen.align_reference", icon="TRIA_DOWN_BAR", text="")
+            op.align_x = "CENTER"
+            op.align_y = "DOWN"
+            op = colrow.operator("screen.align_reference", icon="BLANK1", text="")
+            op.align_x = "RIGHT"
+            op.align_y = "DOWN"
 
 def references_overlays_header(self, context):
     global _viewport_toggle_states
@@ -1124,7 +1149,6 @@ class References_Overlays_OT_AddHotkey(bpy.types.Operator):
         add_hotkey()
         return {"FINISHED"}
 
-
 def add_hotkey():
     wm = bpy.context.window_manager
     kc = wm.keyconfigs.addon
@@ -1151,7 +1175,7 @@ def add_hotkey():
 
         km = kc.keymaps.new(name="3D View", space_type="VIEW_3D")
         kmi = km.keymap_items.new(
-            "screen.gobal_move_reference", "W", "PRESS", ctrl=True
+            "screen.global_move_reference", "W", "PRESS", ctrl=True
         )
         kmi.active = True
         addon_keymaps.append((km, kmi))
@@ -1198,6 +1222,15 @@ def register():
         type=Reference_Overlay_Props
     )
 
+    bpy.types.Screen.references_overlays = bpy.props.PointerProperty(
+        type=Reference_Overlay_Props
+    )
+
+    bpy.types.Screen.references_overlays_independent = bpy.props.BoolProperty(
+        name="Independent Workflow",
+        default=False,
+    )
+
     add_hotkey()
 
     bpy.types.VIEW3D_HT_header.append(references_overlays_header)
@@ -1217,3 +1250,7 @@ def unregister():
     remove_hotkey()
 
     del bpy.types.Scene.references_overlays
+
+    del bpy.types.Screen.references_overlays
+
+    del bpy.types.Scene.references_overlays_independent

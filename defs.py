@@ -3,13 +3,21 @@ import math
 import bpy
 
 
+def get_reference_prop(context):
+    if context.screen.references_overlays_independent:
+        props = context.screen.references_overlays
+    else:
+        props = context.scene.references_overlays
+    return props
+
+
 def resize_image(context, image):
     x = image.size[0]
     y = image.size[1]
     current_size = x * y
 
     sizes = []
-    for item in context.area.references_overlays.reference:
+    for item in get_reference_prop(context).reference:
         image = bpy.data.images.get(item.name)
         sizes.append(image.size[0] * image.size[1])
 
