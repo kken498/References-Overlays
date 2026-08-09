@@ -4,7 +4,7 @@
 # PureRef for Blender!!! 
 You can add references in the 3D Viewport Overlays
 
-### ⭐ Credit
+# ⭐ Credit
 Thanks for new feature overhaul contributed by [hced](https://github.com/hced/References-Overlays)
 
 # Features
