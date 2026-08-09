@@ -1,6 +1,19 @@
 ![Image](https://imgur.com/Qlv8Cox.png)
 # [Blender Extensions](https://extensions.blender.org/add-ons/references-overlays/)
 
+---
+
+> [!IMPORTANT]
+> **This is a heavily modified fork of the original [References Overlays](https://extensions.blender.org/add-ons/references-overlays/) extension by KENKEN.**
+> 
+> This branch contains a comprehensive architectural overhaul, including per-viewport persistence, maximize/unmaximize syncing, and a completely redesigned native modal keymap. 
+> 
+> **Status:** These changes are currently pending review for a potential Pull Request to the main repository. If accepted, this fork will be archived. If not, this codebase may be published as a separate, standalone extension. All credit for the original concept and groundwork goes to the original author.
+> 
+> *Please do not install this directly unless you are testing the proposed changes. For the stable, original version, please visit the [official extension page](https://extensions.blender.org/add-ons/references-overlays/).*
+
+---
+
 # PureRef for Blender!!! 
 You can add references in the 3D Viewport Overlays
 
