@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "references_overlays"
-version = "3.0.0"
+version = "3.0.1"
 name = "References Overlays"
 tagline = "PureRef for Blender - Add references in the 3D Viewport"
 maintainer = "KEN"
@@ -26,3 +26,11 @@ wheels = [
 [permissions]
 files = "Import BMP/TIFF/PNG/JPG/JPEG/GIF/MP4/WEBM from/to disk"
 clipboard = "Paste image from the Clipboard"
+
+
+# BEGIN GENERATED CONTENT.
+# This must not be included in source manifests.
+[build.generated]
+platforms = ["windows-x64"]
+wheels = ["./wheels/pillow-12.2.0-cp311-cp311-win_amd64.whl", "./wheels/pillow-12.2.0-cp313-cp313-win_amd64.whl"]
+# END GENERATED CONTENT.

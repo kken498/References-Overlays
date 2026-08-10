@@ -11,6 +11,33 @@ def get_reference_prop(context):
     return props
 
 
+def transfer_properties(target, source):
+    target.x = source.x
+    target.y = source.y
+    target.size = source.size
+    target.rotation = source.rotation
+    target.opacity = source.opacity
+    target.flip_x = source.flip_x
+    target.flip_y = source.flip_y
+    target.pivot_x = source.pivot_x
+    target.pivot_y = source.pivot_y
+    target.zoom = source.zoom
+    target.crop_left = source.crop_left
+    target.crop_top = source.crop_top
+    target.crop_right = source.crop_right
+    target.crop_bottom = source.crop_bottom
+    target.depth_set = source.depth_set
+    target.orthographic = source.orthographic
+    target.front = source.front
+    target.back = source.back
+    target.left = source.left
+    target.right = source.right
+    target.top = source.top
+    target.bottom = source.bottom
+    target.hide = source.hide
+    target.grayscale = source.grayscale
+    target.lock_position = source.lock_position
+
 def resize_image(context, image):
     x = image.size[0]
     y = image.size[1]
