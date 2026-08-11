@@ -1,4 +1,5 @@
 import os
+import time
 
 import blf
 import bpy
@@ -42,7 +43,6 @@ def get_vp_key(context):
 	if context.screen.show_fullscreen:
 		if _last_active_screen is not None:
 			return f"{_last_active_screen}_{_last_active_index}"
-		
 		return current_key
 
 	# Otherwise, update tracker and return this viewport's key
@@ -53,36 +53,47 @@ def get_vp_key(context):
 
 
 # --- Persistence Property Groups ---
+
+def _mark_modified(self, context):
+	"""Callback to update the last_modified timestamp whenever a property changes."""
+	self.last_modified = time.time()
+
 class ImageTransformState(bpy.types.PropertyGroup):
-	x: bpy.props.FloatProperty(name="X", default=0)
-	y: bpy.props.FloatProperty(name="Y", default=0)
-	size: bpy.props.FloatProperty(name="Size", default=1, min=0.01)
-	rotation: bpy.props.FloatProperty(name="Rotation", default=0, subtype="ANGLE")
-	opacity: bpy.props.FloatProperty(name="Opacity", min=0, max=1, default=1)
-	flip_x: bpy.props.BoolProperty(name="Flip X", default=False)
-	flip_y: bpy.props.BoolProperty(name="Flip Y", default=False)
-	pivot_x: bpy.props.FloatProperty(name="Pivot X", default=0)
-	pivot_y: bpy.props.FloatProperty(name="Pivot Y", default=0)
-	zoom: bpy.props.FloatProperty(name="Zoom", default=0, min=0, max=1)
-	crop_left: bpy.props.FloatProperty(name="Crop Left", min=0, max=1, default=0)
-	crop_top: bpy.props.FloatProperty(name="Crop Top", min=0, max=1, default=0)
-	crop_right: bpy.props.FloatProperty(name="Crop Right", min=0, max=1, default=0)
-	crop_bottom: bpy.props.FloatProperty(name="Crop Bottom", min=0, max=1, default=0)
+	last_modified: bpy.props.FloatProperty(default=0.0)
+
+	x: bpy.props.FloatProperty(name="X", default=0, update=_mark_modified)
+	y: bpy.props.FloatProperty(name="Y", default=0, update=_mark_modified)
+	size: bpy.props.FloatProperty(name="Size", default=1, min=0.01, update=_mark_modified)
+	rotation: bpy.props.FloatProperty(name="Rotation", default=0, subtype="ANGLE", update=_mark_modified)
+	opacity: bpy.props.FloatProperty(name="Opacity", min=0, max=1, default=1, update=_mark_modified)
+	flip_x: bpy.props.BoolProperty(name="Flip X", default=False, update=_mark_modified)
+	flip_y: bpy.props.BoolProperty(name="Flip Y", default=False, update=_mark_modified)
+	pivot_x: bpy.props.FloatProperty(name="Pivot X", default=0, update=_mark_modified)
+	pivot_y: bpy.props.FloatProperty(name="Pivot Y", default=0, update=_mark_modified)
+	zoom: bpy.props.FloatProperty(name="Zoom", default=0, min=0, max=1, update=_mark_modified)
+	crop_left: bpy.props.FloatProperty(name="Crop Left", min=0, max=1, default=0, update=_mark_modified)
+	crop_top: bpy.props.FloatProperty(name="Crop Top", min=0, max=1, default=0, update=_mark_modified)
+	crop_right: bpy.props.FloatProperty(name="Crop Right", min=0, max=1, default=0, update=_mark_modified)
+	crop_bottom: bpy.props.FloatProperty(name="Crop Bottom", min=0, max=1, default=0, update=_mark_modified)
 	depth_set: bpy.props.EnumProperty(
 		name="Depth",
 		default="Default",
 		items=[("Default", "Default", ""), ("Back", "Back", "")],
+		update=_mark_modified
 	)
-	orthographic: bpy.props.BoolProperty(name="Orthographic", default=False)
-	front: bpy.props.BoolProperty(name="Front", default=True)
-	back: bpy.props.BoolProperty(name="Back", default=False)
-	left: bpy.props.BoolProperty(name="Left", default=False)
-	right: bpy.props.BoolProperty(name="Right", default=False)
-	top: bpy.props.BoolProperty(name="Top", default=False)
-	bottom: bpy.props.BoolProperty(name="Bottom", default=False)
-	hide: bpy.props.BoolProperty(name="Hide", default=False)
-	grayscale: bpy.props.BoolProperty(name="Grayscale", default=False)
-	lock_position: bpy.props.BoolProperty(name="Lock Position", default=False)
+	orthographic: bpy.props.BoolProperty(name="Orthographic", default=False, update=_mark_modified)
+	front: bpy.props.BoolProperty(name="Front", default=True, update=_mark_modified)
+	back: bpy.props.BoolProperty(name="Back", default=False, update=_mark_modified)
+	left: bpy.props.BoolProperty(name="Left", default=False, update=_mark_modified)
+	right: bpy.props.BoolProperty(name="Right", default=False, update=_mark_modified)
+	top: bpy.props.BoolProperty(name="Top", default=False, update=_mark_modified)
+	bottom: bpy.props.BoolProperty(name="Bottom", default=False, update=_mark_modified)
+
+	# FIX: Default to True so new viewports hide it by default
+	hide: bpy.props.BoolProperty(name="Hide", default=True, update=_mark_modified)
+
+	grayscale: bpy.props.BoolProperty(name="Grayscale", default=False, update=_mark_modified)
+	lock_position: bpy.props.BoolProperty(name="Lock Position", default=False, update=_mark_modified)
 
 
 class ViewportState(bpy.types.PropertyGroup):
@@ -143,6 +154,11 @@ class Reference_Overlay_Props(bpy.types.PropertyGroup):
 		description="References Global Size",
 	)
 
+	overlays_toggle: bpy.props.BoolProperty(
+		name="References Overlay Toggle",
+		default=True,
+		description="References Overlay Toggle",
+	)
 	show_name: bpy.props.BoolProperty(
 		name="Show Tag Name", default=False, description="Show References Tag Name"
 	)
@@ -192,41 +208,38 @@ def get_current_viewport_state(context):
 
 
 def initialize_transform_for_all_viewports(context, image_index, init_x=0, init_y=0):
-	"""Ensures all 3D viewports have a transform state for the given image index."""
+	"""Ensures all 3D viewports in ALL workspaces have a transform state for the given image index."""
 	props = get_reference_prop(context)
+
+	# FIX: Iterate over ALL screens in the file, not just the active ones in windows.
+	# This guarantees that pasting an image instantly creates its state for every workspace.
 	for screen in bpy.data.screens:
 		view_index = 0
 		for area in screen.areas:
-			if area.type != "VIEW_3D":
-				continue
+			if area.type == "VIEW_3D":
+				vp_key = f"{screen.name}_{view_index}"
+				view_index += 1
 
-			# Calculate key manually for this specific area
-			screen_name = screen.name
-			vp_key = f"{screen_name}_{view_index}"
+				vp_state = None
+				for vp in props.viewport_states:
+					if vp.viewport_id == vp_key:
+						vp_state = vp
+						break
 
-			vp_state = None
-			for vp in props.viewport_states:
-				if vp.viewport_id == vp_key:
-					vp_state = vp
-					break
+				if not vp_state:
+					try:
+						vp_state = props.viewport_states.add()
+						vp_state.viewport_id = vp_key
+					except AttributeError:
+						continue
 
-			if not vp_state:
-				try:
-					vp_state = props.viewport_states.add()
-					vp_state.viewport_id = vp_key
-				except AttributeError:
-					view_index += 1
-					continue
-
-			while len(vp_state.transforms) <= image_index:
-				try:
-					new_transform = vp_state.transforms.add()
-					new_transform.x = init_x
-					new_transform.y = init_y
-				except AttributeError:
-					break
-
-			view_index += 1
+				while len(vp_state.transforms) <= image_index:
+					try:
+						new_transform = vp_state.transforms.add()
+						new_transform.x = init_x
+						new_transform.y = init_y
+					except AttributeError:
+						break
 
 
 def get_image_transform_state(context, image_index):
@@ -237,8 +250,33 @@ def get_image_transform_state(context, image_index):
 
 	if len(vp_state.transforms) <= image_index:
 		try:
+			props = get_reference_prop(context)
+
+			# Find the transform for this image that was modified most recently
+			best_source = None
+			latest_time = -1.0
+
+			for other_vp_state in props.viewport_states:
+				if image_index < len(other_vp_state.transforms):
+					other_t = other_vp_state.transforms[image_index]
+					if other_t.last_modified > latest_time:
+						latest_time = other_t.last_modified
+						best_source = other_t
+
 			while len(vp_state.transforms) <= image_index:
-				vp_state.transforms.add()
+				new_t = vp_state.transforms.add()
+				if best_source:
+					# Inherit position from the most recently modified viewport
+					new_t.x = best_source.x
+					new_t.y = best_source.y
+				else:
+					# Fallback if no other viewport has it yet (e.g. first load)
+					if image_index < len(props.reference):
+						img_name = props.reference[image_index].name
+						img = bpy.data.images.get(img_name)
+						if img:
+							new_t.x = img.size[0] / 4
+							new_t.y = img.size[1] / 4
 		except (AttributeError, RuntimeError):
 			return None
 
@@ -550,7 +588,7 @@ class Overlay_Reference_Shape(bpy.types.Gizmo):
 					color = (0.394198, 0.569371, 1, 1)
 
 				draw_outline(
-					context, min_x - 3, min_y, max_x, max_y, rotation_angle, color, 1.0
+					context, min_x - 3, min_y, max_x, max_y, rotation_angle, color, 1.5
 				)
 
 			elif (
@@ -573,7 +611,7 @@ class Overlay_Reference_Shape(bpy.types.Gizmo):
 					max_y,
 					rotation_angle,
 					(1, 0.6, 0, 1),
-					1.0,
+					1.5,
 				)
 
 		if references_overlays.show_name:
@@ -801,24 +839,51 @@ class REFERENCES_UL_Overlays(bpy.types.UIList):
 		if self.layout_type in {"DEFAULT"}:
 			row = layout.row(align=True)
 
+			# Check if the master overlay is enabled for this specific viewport
+			from . import references_overlays
+			vp_key = references_overlays.get_vp_key(context)
+			is_overlay_enabled = references_overlays._viewport_toggle_states.get(vp_key, False) if vp_key else False
+
 			transform = get_image_transform_state(context, index)
 
 			if bpy.data.images.get(item.name):
 				image = bpy.data.images[item.name]
 
 				if transform:
+					# FIX: Determine if the image is ACTUALLY visible in this viewport.
+					# 1. Master overlay must be enabled.
+					# 2. Specific image must not be hidden.
+					# 3. Must pass orthographic filter.
+					is_actually_visible = is_overlay_enabled and not transform.hide
+
+					if is_actually_visible and transform.orthographic:
+						view = get_view_orientations(context)
+						if not (
+							(transform.front and "Front" in view) or
+							(transform.back and "Back" in view) or
+							(transform.left and "Left" in view) or
+							(transform.right and "Right" in view) or
+							(transform.top and "Top" in view) or
+							(transform.bottom and "Bottom" in view)
+						):
+							is_actually_visible = False
+
+					# Always draw the eye icon, but force it to match the TRUE visibility state.
+					icon_val = "HIDE_OFF" if is_actually_visible else "HIDE_ON"
 					row.prop(
 						transform,
 						"hide",
 						text="",
-						icon="HIDE_ON" if transform.hide else "HIDE_OFF",
+						icon=icon_val,
 						emboss=False,
 					)
 				else:
 					row.label(text="", icon="HIDE_OFF")
 
+				# Dim the image name if it is not actually visible
 				xrow = row.row()
-				xrow.enabled = not (transform.hide if transform else False)
+				xrow.enabled = is_actually_visible
+
 				if image.preview:
 					xrow.prop(
 						item,
@@ -894,7 +959,7 @@ class OVERLAY_PT_Reference(bpy.types.Panel):
 		row = layout.row(align=True)
 		row.operator("screen.load_references", icon="FILEBROWSER", text="Load Image")
 		row.operator("screen.paste_reference", icon="PASTEDOWN", text="")
-		
+
 		if context.screen.references_overlays_independent:
 
 			active = False
@@ -945,12 +1010,12 @@ class OVERLAY_PT_Reference(bpy.types.Panel):
 			list_path = "scene.references_overlays.reference"
 			active_index_path = "scene.references_overlays.reference_index"
 
-		up = sub.operator("uilist.entry_move", icon="TRIA_UP", text="")
+		up = sub.operator("uilist.list_move_reference", icon="TRIA_UP", text="")
 		up.list_path = list_path
 		up.active_index_path = active_index_path
 		up.direction = "DOWN"
 
-		down = sub.operator("uilist.entry_move", icon="TRIA_DOWN", text="")
+		down = sub.operator("uilist.list_move_reference", icon="TRIA_DOWN", text="")
 		down.list_path = list_path
 		down.active_index_path = active_index_path
 		down.direction = "UP"

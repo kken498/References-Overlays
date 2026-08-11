@@ -10,7 +10,6 @@ def get_reference_prop(context):
         props = context.scene.references_overlays
     return props
 
-
 def transfer_properties(target, source):
     target.x = source.x
     target.y = source.y
